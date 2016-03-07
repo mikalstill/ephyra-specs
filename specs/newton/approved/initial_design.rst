@@ -24,8 +24,9 @@ It is noted that this scheme has strong similarities with Blue / Green deploymen
 Simplifying assumptions
 =======================
 
-* The workload running on the Ironic deployment is resiliant to individual machine failures. Specifically in this cas we are assuming Hadoop, but I am sure there are other workloads for which this holds true as well.
+* The workload running on the Ironic deployment is resiliant to individual machine failures. Specifically in this case we are assuming Hadoop, but I am sure there are other workloads for which this holds true as well.
 * Only one deployment is being run at a time -- for example, if the control plane is being deployed, then no applications running above the control plane are being deployed at that time. This is required so that the application health checking doesn't return false negatives and case an unneeded deployment rollback. This assumption will be removed later.
+* Ephyra does not deploy the software running on the control plane (i.e. OpenStack itself). There are plenty of OpenStack installers already, and the user should select whichever one of those they are most comfortable with.
 
 Design goals
 ============
@@ -52,6 +53,7 @@ Ephyra itself shall be API driven, with the following operations being supported
 * Stop a deployment
 * List current deployments
 * Report status of a current deployment
+* "Lock deployments" -- stop deployments from occurring until "unlocked". This is useful if you're currently updating the version of software in one of the control planes and want to ensure a migration between control planes is not attempted until your work is done.
 
 Additionally, there is a plugin infrastructure to determine application health. That interface includes:
 
@@ -59,3 +61,10 @@ Additionally, there is a plugin infrastructure to determine application health. 
 * Add a node
 * Verify a node's health
 * Verify overall application health
+
+Implementation decisions
+========================
+
+Ephyra will be written as a series of taskflow atoms built together into a linear flow. The various steps discussed above will be those atoms, with rollback being implemented after whichever number of retries makes sense per step.
+
+Mistral was also considered, but taskflow appears to map better our needs at this time.
