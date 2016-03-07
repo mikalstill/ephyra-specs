@@ -8,7 +8,13 @@
 Initial design of Ephyra
 ========================
 
-Ephyra is a simple workload migrator for OpenStack.
+Ephyra is a simple forklift manager for OpenStack clouds.
+
+Glossary
+========
+
+* Control plane: an OpenStack deployment, not including the Ironic nodes which that deployment uses. So, Glance, Keystone, Nova, Ironic, and whatever other OpenStack components are deployed apart from the Ironic target machines.
+* Forklifting: the process of moving an Ironic node from one control plane to another.
 
 Problem description
 ===================
@@ -17,15 +23,15 @@ Imagine that you have a pool of Ironic nodes running a Hadoop workload. You woul
 
 The solution we have come to is that you have two OpenStack deployments. In the initial state, the first of these deployments (which we shall call CP1) has all of the Ironic nodes registered with it, and the second deployment (CP2) has none. The Continous Deployment system detects that there is a new version of OpenStack to deploy. It installs that version onto CP2 in whatever manner it desires. Installation of OpenStack is outside the scope of Ephyra, but it is assumed to be automated.
 
-An API call is then made to Ephyra, which manages migrating Ironic nodes from CP1 to CP2. This is done by removing the instance running on each node from Hadoop in turn, shutting down the instance on the node, de-enrolling the node from Ironic in CP1, enrolling the node with Ironic in CP2, booting an instance mapping to that nodes "role" in Hadoop, and then adding the node back to Hadoop. This process is discussed in more detail below.
+An API call is then made to Ephyra, which manages forklifting Ironic nodes from CP1 to CP2. This is done by removing the instance running on each node from Hadoop in turn, shutting down the instance on the node, de-enrolling the node from Ironic in CP1, enrolling the node with Ironic in CP2, booting an instance mapping to that nodes "role" in Hadoop, and then adding the node back to Hadoop. This process is discussed in more detail below.
 
-It is noted that this scheme has strong similarities with Blue / Green deployments (http://martinfowler.com/bliki/BlueGreenDeployment.html) as used in the devops community.
+It is noted that this scheme has strong similarities with Blue / Green deployments (http://martinfowler.com/bliki/BlueGreenDeployment.html) as used in the devops community. This is deliberate, but our solution does not exactly correlate with the common devops practise.
 
 Simplifying assumptions
 =======================
 
 * The workload running on the Ironic deployment is resiliant to individual machine failures. Specifically in this case we are assuming Hadoop, but I am sure there are other workloads for which this holds true as well.
-* Only one deployment is being run at a time -- for example, if the control plane is being deployed, then no applications running above the control plane are being deployed at that time. This is required so that the application health checking doesn't return false negatives and case an unneeded deployment rollback. This assumption will be removed later.
+* Only one deployment is being run at a time -- for example, if the control plane is being deployed, then no applications running above the control plane are being deployed at that time. This is required so that the application health checking doesn't return false negatives and cause an unneeded deployment rollback. This assumption will be removed later.
 * Ephyra does not deploy the software running on the control plane (i.e. OpenStack itself). There are plenty of OpenStack installers already, and the user should select whichever one of those they are most comfortable with.
 
 Design goals
@@ -49,18 +55,20 @@ API interface
 
 Ephyra itself shall be API driven, with the following operations being supported:
 
-* Start a deployment
-* Stop a deployment
-* List current deployments
-* Report status of a current deployment
-* "Lock deployments" -- stop deployments from occurring until "unlocked". This is useful if you're currently updating the version of software in one of the control planes and want to ensure a migration between control planes is not attempted until your work is done.
+* Enroll an OpenStack control plane.
+* Start a forklift.
+* Pause a forklift.
+* Stop and rollback a forklift.
+* List current forklifts.
+* Report status of a current forklift.
+* "Lock deployments" -- stop forklifts from occurring until "unlocked". This is useful if you're currently updating the version of software in one of the control planes and want to ensure a forklift between control planes is not attempted until your work is done.
 
 Additionally, there is a plugin infrastructure to determine application health. That interface includes:
 
-* Remove a node
-* Add a node
-* Verify a node's health
-* Verify overall application health
+* Prepare for forklift of a node.
+* Add a node post forklift.
+* Verify a node's health.
+* Verify overall application health.
 
 Implementation decisions
 ========================
