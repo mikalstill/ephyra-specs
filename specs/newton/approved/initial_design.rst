@@ -23,7 +23,7 @@ Imagine that you have a pool of Ironic nodes running a Hadoop workload. You woul
 
 The solution we have come to is that you have two OpenStack deployments. In the initial state, the first of these deployments (which we shall call CP1) has all of the Ironic nodes registered with it, and the second deployment (CP2) has none. The Continous Deployment system detects that there is a new version of OpenStack to deploy. It installs that version onto CP2 in whatever manner it desires. Installation of OpenStack is outside the scope of Ephyra, but it is assumed to be automated.
 
-An API call is then made to Ephyra, which manages forklifting Ironic nodes from CP1 to CP2. This is done by removing the instance running on each node from Hadoop in turn, shutting down the instance on the node, de-enrolling the node from Ironic in CP1, enrolling the node with Ironic in CP2, booting an instance mapping to that nodes "role" in Hadoop, and then adding the node back to Hadoop. This process is discussed in more detail below.
+An API call is then made to Ephyra, which manages forklifting Ironic nodes from CP1 to CP2. For each node to be forklifted this is done by: informing Hadoop that a forklift is about to be performed on a given node; recording the image UUID that is currently running on that node; deleting the instance running on the node; de-enrolling the node from Ironic in CP1; enrolling the node with Ironic in CP2; booting an instance with the previously recorded UUID; and then informing Hadoop that the node is available once again. This process is discussed in more detail below.
 
 It is noted that this scheme has strong similarities with Blue / Green deployments (http://martinfowler.com/bliki/BlueGreenDeployment.html) as used in the devops community. This is deliberate, but our solution does not exactly correlate with the common devops practise.
 
@@ -31,8 +31,11 @@ Simplifying assumptions
 =======================
 
 * The workload running on the Ironic deployment is resiliant to individual machine failures. Specifically in this case we are assuming Hadoop, but I am sure there are other workloads for which this holds true as well.
-* Only one deployment is being run at a time -- for example, if the control plane is being deployed, then no applications running above the control plane are being deployed at that time. This is required so that the application health checking doesn't return false negatives and cause an unneeded deployment rollback. This assumption will be removed later.
+* The only users of the control plane API endpoints are the continuous deployment system and Ephyra. Specifically, user traffic is being sent to the applications being run on the managed infrastructure (i.e. Hadoop) and are not OpenStack users themselves. It is possible that the Continuous Deployment system will need to know which control plane is currently the "blessed" one, but it is unresolved if that belongs in the Continuous Delivery system or Ephyra.
+* The Glance image UUIDs for both control planes are synchronized. This is currently supported by the image upload tool specifying the image UUID when uploading the image via the Glance API in each control plane.
+* Only one forklift is being run at a time -- specifically if a forklift is currently under way, then no applications running on the infrastructure being forklifted are being re-deployed at the same time. This is required so that the application health checking doesn't return false negatives and cause an unneeded forklift rollback. This assumption will be removed later.
 * Ephyra does not deploy the software running on the control plane (i.e. OpenStack itself). There are plenty of OpenStack installers already, and the user should select whichever one of those they are most comfortable with.
+* What is meant by the "pause" operation is ambigious. Does it mean we don't start any new forklifts but allow machines which are currently being moved to finish their forlift? Or does it mean we stop outstanding forklift operations without any more atoms being executed? For now, we will simply stop new forklifts but let currently in flight forklifts to complete. This will probably need to be improved in the future.
 
 Design goals
 ============
@@ -58,6 +61,7 @@ Ephyra itself shall be API driven, with the following operations being supported
 * Enroll an OpenStack control plane.
 * Start a forklift.
 * Pause a forklift.
+* Resume a previously paused forklift.
 * Stop and rollback a forklift.
 * List current forklifts.
 * Report status of a current forklift.
@@ -65,7 +69,7 @@ Ephyra itself shall be API driven, with the following operations being supported
 
 Additionally, there is a plugin infrastructure to determine application health. That interface includes:
 
-* Prepare for forklift of a node.
+* Prepare for forklift of a node -- this call is Hadoop's opportunity to say "please not this one". For example, if removing a particular node from Hadoop would leave Hadoop unacceptibly degraded, then an error to that effect is returned here and that node's forklift is deferred to a later time.
 * Add a node post forklift.
 * Verify a node's health.
 * Verify overall application health.
@@ -73,6 +77,4 @@ Additionally, there is a plugin infrastructure to determine application health. 
 Implementation decisions
 ========================
 
-Ephyra will be written as a series of taskflow atoms built together into a linear flow. The various steps discussed above will be those atoms, with rollback being implemented after whichever number of retries makes sense per step.
-
-Mistral was also considered, but taskflow appears to map better our needs at this time.
+Ephyra will be written as a series of taskflow atoms built together into a linear flow. The various steps discussed above will be those atoms, with rollback being implemented after whichever number of retries makes sense per step. Mistral was also considered, but taskflow appears to map better our needs at this time.
