@@ -19,7 +19,7 @@ Glossary
 Problem description
 ===================
 
-Imagine that you have a pool of Ironic nodes running a Hadoop workload. You would like to do Continuous Deployment of the control plane for this OpenStack deployment, while having a graceful rollback procedure for when the new version of the control plane is broken for some reason. Specifically for this thought experiment, you can assume that only Ironic is supported as a Nova hypervisor in this deployment, and that the workload running on those Ironic nodes can handle partial outages without degrading performance.
+Imagine that you have a pool of Ironic nodes running a Hadoop workload. You would like to do Continuous Delivery of the control plane for this OpenStack deployment, while having a graceful rollback procedure for when the new version of the control plane is broken for some reason. Specifically for this thought experiment, you can assume that only Ironic is supported as a Nova hypervisor in this deployment, and that the workload running on those Ironic nodes can handle partial outages without degrading performance.
 
 The solution we have come to is that you have two OpenStack deployments. In the initial state, the first of these deployments (which we shall call CP1) has all of the Ironic nodes registered with it, and the second deployment (CP2) has none. The Continous Deployment system detects that there is a new version of OpenStack to deploy. It installs that version onto CP2 in whatever manner it desires. Installation of OpenStack is outside the scope of Ephyra, but it is assumed to be automated.
 
@@ -31,11 +31,11 @@ Simplifying assumptions
 =======================
 
 * The workload running on the Ironic deployment is resiliant to individual machine failures. Specifically in this case we are assuming Hadoop, but I am sure there are other workloads for which this holds true as well.
-* The only users of the control plane API endpoints are the continuous deployment system and Ephyra. Specifically, user traffic is being sent to the applications being run on the managed infrastructure (i.e. Hadoop) and are not OpenStack users themselves. It is possible that the Continuous Deployment system will need to know which control plane is currently the "blessed" one, but it is unresolved if that belongs in the Continuous Delivery system or Ephyra.
+* The only users of the control plane API endpoints are the Continuous Delivery system and Ephyra. Specifically, user traffic is being sent to the applications being run on the managed infrastructure (i.e. Hadoop) and are not OpenStack users themselves. It is possible that the Continuous Delivery system will need to know which control plane is currently the "blessed" one, but it is unresolved if that belongs in the Continuous Delivery system or Ephyra.
 * The Glance image UUIDs for both control planes are synchronized. This is currently supported by the image upload tool specifying the image UUID when uploading the image via the Glance API in each control plane.
 * Only one forklift is being run at a time -- specifically if a forklift is currently under way, then no applications running on the infrastructure being forklifted are being re-deployed at the same time. This is required so that the application health checking doesn't return false negatives and cause an unneeded forklift rollback. This assumption will be removed later.
 * Ephyra does not deploy the software running on the control plane (i.e. OpenStack itself). There are plenty of OpenStack installers already, and the user should select whichever one of those they are most comfortable with.
-* What is meant by the "pause" operation is ambigious. Does it mean we don't start any new forklifts but allow machines which are currently being moved to finish their forlift? Or does it mean we stop outstanding forklift operations without any more atoms being executed? For now, we will simply stop new forklifts but let currently in flight forklifts to complete. This will probably need to be improved in the future.
+* What is meant by the "pause" operation is ambigious. Does it mean we don't start any new forklifts but allow machines which are currently being moved to finish their forklift? Or does it mean we stop outstanding forklift operations without any more atoms being executed? For now, we will simply stop new forklifts but let currently in flight forklifts to complete. This will probably need to be improved in the future.
 
 Design goals
 ============
